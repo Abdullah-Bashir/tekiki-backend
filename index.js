@@ -1,3 +1,4 @@
+// index.js
 import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
@@ -72,7 +73,7 @@ mongoose
     .catch((err) => console.error("MongoDB connection error:", err));
 
 // Start server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });

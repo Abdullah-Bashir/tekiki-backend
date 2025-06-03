@@ -1,14 +1,29 @@
-export const extractPublicId = (url) => {
-    if (!url) return null;
+// utils/cloudinaryUtils.js
 
-    // Matches: /upload/v1234567890/folder/subfolder/file.ext
-    const matches = url.match(/\/upload\/v\d+\/(.+?)\./);
-    if (matches && matches[1]) {
-        return matches[1];
-    }
+/**
+ * Given a full Cloudinary URL like:
+ *   https://res.cloudinary.com/<cloud>/raw/upload/v1234567890/services/documents/abc123
+ * 
+ * extractVersion returns "1234567890" (the digits after "v").
+ */
+export function extractVersion(fullUrl) {
+  if (!fullUrl) return null;
+  const match = fullUrl.match(/\/upload\/v(\d+)\//);
+  return match ? match[1] : null;
+}
 
-    // Fallback: last filename without extension
-    const parts = url.split('/');
-    const filename = parts[parts.length - 1];
-    return filename.split('.')[0];
-};
+/**
+ * Given the same full URL:
+ *   https://res.cloudinary.com/<cloud>/raw/upload/v1234567890/services/documents/abc123
+ * 
+ * extractPublicId returns "services/documents/abc123".
+ */
+export function extractPublicId(fullUrl) {
+  if (!fullUrl) return null;
+  const parts = fullUrl.split('/upload/');
+  if (parts.length < 2) return null;
+  // parts[1] === "v1234567890/services/documents/abc123"
+  // Strip off the "v<digits>/" prefix:
+  const afterVersion = parts[1].replace(/^v\d+\//, '');
+  return afterVersion; // → "services/documents/abc123"
+}
