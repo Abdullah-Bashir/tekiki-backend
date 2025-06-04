@@ -30,7 +30,7 @@ app.use(cors({
         // Normalize the origin by removing any trailing slash
         const normalizedOrigin = origin.replace(/\/$/, "");
         // Allowed origin from environment variable or fallback
-        const allowedOrigin = (process.env.FRONTEND_URL || 'https://tekiki-frontend.vercel.app/').replace(/\/$/, "");
+        const allowedOrigin = (process.env.FRONTEND_URL || 'https://tekiki-frontend.vercel.app').replace(/\/$/, "");
 
         // Compare the normalized incoming origin with the allowed origin
         if (normalizedOrigin === allowedOrigin) {
