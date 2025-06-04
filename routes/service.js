@@ -59,7 +59,7 @@ router.post(
     });
   },
   async (req, res) => {
-    console.log('in here…'); // now we know Multer succeeded
+    console.log('in here..'); // now we know Multer succeeded
     try {
       // …all your validation, Service.save(), etc.…
       const { serviceName, description, interviewDates } = req.body;
