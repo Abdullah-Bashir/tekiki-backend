@@ -21,27 +21,30 @@ const limiter = rateLimit({
     message: "Too many requests from this IP, please try again later.",
 });
 
-// CORS middleware configuration
-app.use(cors({
-    origin: (origin, callback) => {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
+const allowedOrigins = [
+  "https://tekiki-frontend.vercel.app",
+  "http://localhost:3000"
+];
 
-        // Normalize the origin by removing any trailing slash
-        const normalizedOrigin = origin.replace(/\/$/, "");
-        // Allowed origin from environment variable or fallback
-        const allowedOrigin = (process.env.FRONTEND_URL || 'https://tekiki-frontend.vercel.app').replace(/\/$/, "");
+app.use(
+  cors({
+    origin: (incomingOrigin, callback) => {
+      // Allow requests with no Origin (e.g. Postman, mobile apps, curl)
+      if (!incomingOrigin) return callback(null, true);
 
-        // Compare the normalized incoming origin with the allowed origin
-        if (normalizedOrigin === allowedOrigin) {
-            return callback(null, true);
-        } else {
-            console.error(`CORS error: Request from origin "${normalizedOrigin}" not allowed.`);
-            return callback(new Error('Not allowed by CORS'));
-        }
+      // Strip any trailing slash before matching
+      const normalized = incomingOrigin.replace(/\/$/, "");
+
+      if (allowedOrigins.includes(normalized)) {
+        return callback(null, true);
+      }
+
+      console.error(`CORS blocked: ${incomingOrigin}`);
+      return callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
-}));
+  })
+);
 
 // Standard middleware
 app.use(express.json());
