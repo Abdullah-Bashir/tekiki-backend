@@ -20,10 +20,12 @@ export function extractVersion(fullUrl) {
  */
 export function extractPublicId(fullUrl) {
   if (!fullUrl) return null;
-  const parts = fullUrl.split('/upload/');
-  if (parts.length < 2) return null;
-  // parts[1] === "v1234567890/services/documents/abc123"
-  // Strip off the "v<digits>/" prefix:
-  const afterVersion = parts[1].replace(/^v\d+\//, '');
-  return afterVersion; // → "services/documents/abc123"
+
+  // Handle Cloudinary URL formats:
+  // 1. http://res.cloudinary.com/xxx/image/upload/v1234567/folder/file.jpg
+  // 2. http://res.cloudinary.com/xxx/raw/upload/v1234567/folder/file.pdf
+  const cloudinaryRegex = /cloudinary\.com\/.+\/(image|video|raw)\/upload\/(?:v\d+\/)?(.+?)(?:\.\w+)?$/;
+  const match = fullUrl.match(cloudinaryRegex);
+
+  return match ? match[2] : null; // Returns "folder/file" without extension
 }

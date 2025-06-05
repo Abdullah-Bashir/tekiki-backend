@@ -22,28 +22,28 @@ const limiter = rateLimit({
 });
 
 const allowedOrigins = [
-  "https://tekiki-frontend.vercel.app",
-  "http://localhost:3000"
+    "https://tekiki-frontend.vercel.app",
+    "http://localhost:3000"
 ];
 
 app.use(
-  cors({
-    origin: (incomingOrigin, callback) => {
-      // Allow requests with no Origin (e.g. Postman, mobile apps, curl)
-      if (!incomingOrigin) return callback(null, true);
+    cors({
+        origin: (incomingOrigin, callback) => {
+            // Allow requests with no Origin (e.g. Postman, mobile apps, curl)
+            if (!incomingOrigin) return callback(null, true);
 
-      // Strip any trailing slash before matching
-      const normalized = incomingOrigin.replace(/\/$/, "");
+            // Strip any trailing slash before matching
+            const normalized = incomingOrigin.replace(/\/$/, "");
 
-      if (allowedOrigins.includes(normalized)) {
-        return callback(null, true);
-      }
+            if (allowedOrigins.includes(normalized)) {
+                return callback(null, true);
+            }
 
-      console.error(`CORS blocked: ${incomingOrigin}`);
-      return callback(new Error("Not allowed by CORS"));
-    },
-    credentials: true,
-  })
+            console.error(`CORS blocked: ${incomingOrigin}`);
+            return callback(new Error("Not allowed by CORS"));
+        },
+        credentials: true,
+    })
 );
 
 // Standard middleware

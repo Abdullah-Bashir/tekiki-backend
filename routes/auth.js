@@ -6,9 +6,9 @@ import User from "../models/user.js";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 import { authMiddleware } from "../middleware/auth.js";
-import validator from "validator"
+import validator from "validator";
 
-dotenv.config(); // Load environment variables
+dotenv.config();
 
 const router = express.Router();
 
@@ -16,27 +16,17 @@ const router = express.Router();
 const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
     port: 465,
-    secure: true, // Use SSL/TLS
+    secure: true,
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
     },
     tls: {
-        rejectUnauthorized: false, // Do not fail on invalid certificates
+        rejectUnauthorized: false,
     },
-    debug: true, // Enable debugging
-    logger: true, // Log to console
+    debug: true,
+    logger: true,
 });
-
-// Verify transporter configuration
-// transporter.verify((error, success) => {
-//     if (error) {
-//         console.error("SMTP configuration error:", error);
-//     } else {
-//         console.log("SMTP server is ready to send emails");
-//     }
-// });
-
 
 // Helper function to send email
 const sendEmail = async (to, subject, html) => {
@@ -48,18 +38,14 @@ const sendEmail = async (to, subject, html) => {
             html,
         });
     } catch (error) {
-
         throw new Error("Failed to send email");
     }
 };
 
-
-
 // Helper function to generate JWT token
 const generateToken = (user) => {
-    return jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "3h" });
+    return jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
 };
-
 
 // Signup Route
 router.post("/signup", async (req, res) => {
@@ -103,23 +89,24 @@ router.post("/login", async (req, res) => {
             return res.status(401).json({ message: "Invalid credentials" });
         }
 
-        const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, {
-            expiresIn: "7d",
-        });
+        const token = generateToken(user);
 
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        res.status(200).json({
+            message: "Login successful",
+            token,
+            user: {
+                username: user.username,
+                email: user.email,
+                role: user.role
+            }
         });
-
-        res.status(200).json({ message: "Login successful", user: { username: user.username, email: user.email, role: user.role } });
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: "Server error" });
     }
 });
 
+// Token validation route
 router.get('/validate-token', authMiddleware, (req, res) => {
     res.json({
         valid: true,
@@ -127,13 +114,9 @@ router.get('/validate-token', authMiddleware, (req, res) => {
     });
 });
 
-router.get("/logout", (req, res) => {
-    res.clearCookie("token", {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-    });
-    return res.status(200).json({ message: "Logged out successfully" });
+// Logout route - Client-side will handle token removal
+router.post("/logout", (req, res) => {
+    res.status(200).json({ message: "Logout successful" });
 });
 
 // Forgot password route
@@ -141,29 +124,22 @@ router.post("/forgot-password", async (req, res) => {
     try {
         const { email } = req.body;
 
-        // Check if email is provided
         if (!email) {
             return res.status(400).json({ message: "Email is required" });
         }
 
-        // Find user by email
         const user = await User.findOne({ email });
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        // Generate reset token
         const resetToken = crypto.randomBytes(20).toString("hex");
-
-        // Hash the token and save it in the database
         user.resetPasswordToken = crypto.createHash("sha256").update(resetToken).digest("hex");
-        user.resetPasswordExpire = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+        user.resetPasswordExpire = new Date(Date.now() + 10 * 60 * 1000);
         await user.save();
 
-        // Generate reset URL
         const resetUrl = `${process.env.FRONTEND_URL}/resetpassword/${resetToken}`;
 
-        // Send email with reset link
         const htmlTemplate = `
             <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
                 <h2 style="color:rgb(15, 235, 22); text-align: center;">Password Reset Request</h2>
@@ -193,15 +169,12 @@ router.post("/forgot-password", async (req, res) => {
     }
 });
 
-// reset password
+// Reset password route
 router.put("/reset-password/:token", async (req, res) => {
     try {
-        const { token: resetToken } = req.params; // Rename `token` to `resetToken`
+        const { token: resetToken } = req.params;
         const { newPassword, confirmPassword } = req.body;
 
-        console.log(req.body)
-
-        // Validate input
         if (!newPassword || !confirmPassword) {
             return res.status(400).json({ message: "Both password fields are required" });
         }
@@ -210,10 +183,8 @@ router.put("/reset-password/:token", async (req, res) => {
             return res.status(400).json({ message: "Passwords do not match" });
         }
 
-        // Hash the token for comparison
-        const hashedToken = crypto.createHash("sha256").update(resetToken).digest("hex"); // Use `resetToken`
+        const hashedToken = crypto.createHash("sha256").update(resetToken).digest("hex");
 
-        // Find user with valid token
         const user = await User.findOne({
             resetPasswordToken: hashedToken,
             resetPasswordExpire: { $gt: Date.now() }
@@ -223,33 +194,20 @@ router.put("/reset-password/:token", async (req, res) => {
             return res.status(400).json({ message: "Invalid or expired token" });
         }
 
-        // Update password and clear reset fields
         user.password = await bcrypt.hash(newPassword, 10);
         user.resetPasswordToken = undefined;
         user.resetPasswordExpire = undefined;
         await user.save();
 
-        // Generate a new JWT
-        const jwtToken = generateToken(user); // Use `jwtToken` instead of `token`
+        const jwtToken = generateToken(user);
 
-        // Set JWT in a cookie
-        res.cookie("token", jwtToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            maxAge: 3600000, // 1 hour
-            sameSite: "strict",
+        res.json({
+            message: "Password reset successfully",
+            token: jwtToken
         });
-
-        // Send success response
-        res.json({ message: "Password reset successfully" });
     } catch (error) {
-
         res.status(500).json({ message: error.message || "An error occurred. Please try again." });
     }
 });
-
-
-
-
 
 export default router;
