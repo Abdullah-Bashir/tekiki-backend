@@ -7,7 +7,7 @@ export const generateToken = (user) => {
 
 export const authMiddleware = async (req, res, next) => {
     try {
-        // Get token from Authorization header
+        // Get token from authorization header
         const authHeader = req.headers.authorization;
 
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
