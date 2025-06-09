@@ -8,6 +8,7 @@ import rateLimit from "express-rate-limit";
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/user.js"
 import serviceRoutes from "./routes/service.js"
+import applicationRoutes from "./routes/application.js"
 import { errorHandler } from "./middleware/errorHandler.js";
 
 dotenv.config();
@@ -62,6 +63,7 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/service", serviceRoutes);
+app.use("/api/application", applicationRoutes)
 
 // Error handling middleware
 app.use(errorHandler);
