@@ -50,7 +50,7 @@ const generateToken = (user) => {
 // Signup Route
 router.post("/signup", async (req, res) => {
     try {
-        const { username, email, password } = req.body;
+        const { firstName, lastName, email, password } = req.body;
 
         const existingUser = await User.findOne({ email });
         if (existingUser) {
@@ -60,14 +60,24 @@ router.post("/signup", async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const newUser = new User({
-            username,
+            firstName,
+            lastName,
             email,
             password: hashedPassword,
         });
 
         await newUser.save();
 
-        res.status(201).json({ message: "Signup successful" });
+        res.status(201).json({ 
+            message: "Signup successful",
+            user: {
+                _id: newUser._id,
+                firstName: newUser.firstName,
+                lastName: newUser.lastName,
+                email: newUser.email,
+                role: newUser.role
+            }
+        });
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: "Server error" });

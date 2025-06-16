@@ -1,33 +1,50 @@
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
-    {
-        username: { type: String, required: true, unique: true, trim: true },
-        email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-        password: { type: String, required: true },
-
-        role: { type: String, enum: ["user", "admin"], default: "user" },
-
-        resetPasswordToken: { type: String, default: null },
-        resetPasswordExpire: { type: Date, default: null },
-
-
-        createdAt: { type: Date, default: Date.now },
-
-        documents: [
-            {
-                url: { type: String, required: true },
-                type: { type: String, enum: ["cv", "certificate", "other"], default: "other" },
-                uploadedAt: { type: Date, default: Date.now }
-            }
-        ],
-
-
+  {
+    firstName: { 
+      type: String,
+      required: true,
+      trim: true
     },
-    { timestamps: true }
+    lastName: { 
+      type: String,
+      required: true,
+      trim: true
+    },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
+    password: { 
+      type: String, 
+      required: true 
+    },
+    role: { 
+      type: String, 
+      enum: ["user", "admin"], 
+      default: "user" 
+    },
+    resetPasswordToken: { 
+      type: String, 
+      default: null 
+    },
+    resetPasswordExpire: { 
+      type: Date, 
+      default: null 
+    },
+    cv: {
+      url: { type: String },
+      resource_type: { type: String, default: "raw" },
+      originalName: { type: String },
+    },
+  },
+  { timestamps: true }
 );
 
 const User = mongoose.model("User", userSchema);
 
 export default User;
-

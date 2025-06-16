@@ -32,6 +32,66 @@ function makeRawDownloadUrl(cloudinaryUrl, originalName) {
     return url;
 }
 
+
+/**
+ * PUT /:id     ← Update an existing service
+ *   - You can replace text fields, replace coverImage, delete old media/docs, add new media/docs, update interviewDates.
+ */
+router.post(
+  "/",
+  (req, res, next) => {
+    // Only use multer if there's actually a file upload
+    if (req.headers['content-type']?.includes('multipart/form-data')) {
+      upload.single("cv")(req, res, (uploadErr) => {
+        if (uploadErr) {
+          console.error("Upload error:", uploadErr);
+          return res.status(400).json({ error: uploadErr.message });
+        }
+        next();
+      });
+    } else {
+      next();
+    }
+  },
+  async (req, res) => {
+    try {
+      let cvData = null;
+      
+      // Handle file upload case
+      if (req.file) {
+        cvData = {
+          url: req.file.path,
+          originalName: req.file.originalname,
+          resource_type: req.file.resource_type || "raw",
+        };
+      } 
+      // Handle existing CV reference case
+      else if (req.body.existingCvId) {
+        // Verify the CV belongs to the user
+        const user = await User.findById(req.user.id);
+        if (!user.cv || user.cv._id.toString() !== req.body.existingCvId) {
+          return res.status(400).json({ error: "Invalid CV reference" });
+        }
+        cvData = user.cv;
+      }
+
+      const applicationData = {
+        ...req.body,
+        interviewDate: JSON.parse(req.body.interviewDate),
+        cv: cvData
+      };
+
+      const newApplication = new Application(applicationData);
+      const savedApplication = await newApplication.save();
+      res.status(201).json(savedApplication);
+    } catch (error) {
+      console.error("Application creation error:", error);
+      res.status(400).json({ error: error.message });
+    }
+  }
+);
+
+
 /**
  * POST /        ← Create a new service
  * Fields: serviceName (string), description (string), interviewDates (JSON-stringified array of {date, time})
@@ -123,57 +183,6 @@ router.post('/', (req, res, next) => {
 );
 
 
-router.get('/:serviceId/download/:docId', async (req, res) => {
-    try {
-        const { serviceId, docId } = req.params;
-        const service = await Service.findById(serviceId);
-        if (!service) return res.status(404).send('Service not found');
-
-        // Find the document sub‐record by its ObjectId
-        const doc = service.documents.id(docId);
-        if (!doc) return res.status(404).send('Document not found');
-
-        const fileUrl = doc.url;            // e.g. "https://res.cloudinary.com/.../raw/upload/v17489.../services/documents/abc123"
-        const originalName = doc.originalName;   // e.g. "1.pdf"
-
-        // 1) Ask Cloudinary for the raw file as a stream
-        const cloudinaryResponse = await axios.get(fileUrl, {
-            responseType: 'stream'
-        });
-
-        // 2) Copy Cloudinary’s Content-Type (e.g. application/pdf)
-        const contentType = cloudinaryResponse.headers['content-type'] || 'application/octet-stream';
-
-        // 3) Set our own headers so the browser saves as the original filename:
-        res.setHeader('Content-Type', contentType);
-        res.setHeader(
-            'Content-Disposition',
-            `attachment; filename="${path.basename(originalName)}"`
-        );
-
-        // 4) Pipe the Cloudinary stream directly into our response
-        cloudinaryResponse.data.pipe(res);
-    } catch (err) {
-        console.error('Download proxy error:', err);
-        return res.status(500).send('Failed to download document');
-    }
-});
-
-
-/**
- * GET /        ← List all services
- */
-router.get('/', async (req, res) => {
-    try {
-        const services = await Service.find();
-        return res.json(services);
-    } catch (error) {
-        console.error('Error fetching services:', error);
-        return res.status(500).json({ error: error.message });
-    }
-});
-
-
 /**
  * GET /:id     ← Fetch a single service by ID, with downloadUrl for each document
  */
@@ -210,154 +219,6 @@ router.get('/:id', async (req, res) => {
         return res.status(500).json({ error: error.message });
     }
 });
-
-
-/**
- * PUT /:id     ← Update an existing service
- *   - You can replace text fields, replace coverImage, delete old media/docs, add new media/docs, update interviewDates.
- */
-router.put(
-    '/:id',
-    upload.fields([
-        { name: 'coverImage', maxCount: 1 },
-        { name: 'media', maxCount: 10 },
-        { name: 'documents', maxCount: 5 }
-    ]),
-    async (req, res) => {
-        try {
-            const service = await Service.findById(req.params.id);
-            if (!service) {
-                return res.status(404).json({ error: 'Service not found' });
-            }
-
-            const assetsToDelete = [];
-
-            // 1) Update text fields if provided
-            if (req.body.serviceName) service.serviceName = req.body.serviceName;
-            if (req.body.description) service.description = req.body.description;
-
-            // 2) Replace coverImage if a new file was uploaded
-            if (req.files?.coverImage) {
-                // schedule deletion of old coverImage from Cloudinary
-                if (service.coverImage) {
-                    assetsToDelete.push({
-                        url: service.coverImage,
-                        resource_type: 'image'
-                    });
-                }
-                service.coverImage = req.files.coverImage[0].path;
-            }
-
-            // 3) Handle media deletions (if any IDs passed in req.body.mediaToDelete)
-            if (req.body.mediaToDelete) {
-                const idsToDelete = JSON.parse(req.body.mediaToDelete);
-                service.media.forEach((item) => {
-                    if (idsToDelete.includes(item._id.toString())) {
-                        assetsToDelete.push({
-                            url: item.url,
-                            resource_type: item.resource_type || 'image'
-                        });
-                    }
-                });
-                service.media = service.media.filter(
-                    (item) => !idsToDelete.includes(item._id.toString())
-                );
-            }
-
-            // 4) Add new media files (if any)
-            if (req.files?.media) {
-                for (const file of req.files.media) {
-                    service.media.push({
-                        url: file.path,
-                        resource_type: file.mimetype.startsWith('video') ? 'video' : 'image'
-                    });
-                }
-            }
-
-            // 5) Handle document deletions (if any IDs passed in req.body.docsToDelete)
-            if (req.body.docsToDelete) {
-                const idsToDelete = JSON.parse(req.body.docsToDelete);
-                service.documents.forEach((doc) => {
-                    if (idsToDelete.includes(doc._id.toString())) {
-                        assetsToDelete.push({
-                            url: doc.url,
-                            resource_type: doc.resource_type || 'raw'
-                        });
-                    }
-                });
-                service.documents = service.documents.filter(
-                    (doc) => !idsToDelete.includes(doc._id.toString())
-                );
-            }
-
-            // 6) Add new documents
-            if (req.files?.documents) {
-                for (const file of req.files.documents) {
-                    service.documents.push({
-                        url: file.path,
-                        resource_type: 'raw',
-                        originalName: file.originalname
-                    });
-                }
-            }
-
-            // 7) Update interviewDates if provided
-            if (req.body.interviewDates) {
-                try {
-                    const parsedDates = JSON.parse(req.body.interviewDates);
-                    service.interviewDates = parsedDates.map((d) => ({
-                        date: new Date(d.date),
-                        time: d.time
-                    }));
-                } catch (err) {
-                    return res
-                        .status(400)
-                        .json({ message: 'Invalid format for interviewDates' });
-                }
-            }
-
-            // 8) Save the updated service
-            await service.save();
-
-            // 9) Delete old Cloudinary assets (coverImage / media / docs)
-            for (const asset of assetsToDelete) {
-                try {
-                    const publicId = extractPublicId(asset.url);
-                    if (publicId) {
-                        await cloudinary.uploader.destroy(publicId, {
-                            resource_type: asset.resource_type
-                        });
-                    }
-                } catch (err) {
-                    console.error('Error deleting old Cloudinary asset:', err);
-                }
-            }
-
-            // 10) Return the freshly updated service (you can refetch if you want the downloadUrl in docs)
-            const updated = await Service.findById(req.params.id);
-            const docsWithDownload = updated.documents.map((doc) => ({
-                _id: doc._id,
-                url: doc.url,
-                resource_type: doc.resource_type,
-                originalName: doc.originalName,
-                downloadUrl: makeRawDownloadUrl(doc.url, doc.originalName)
-            }));
-
-            return res.json({
-                _id: updated._id,
-                serviceName: updated.serviceName,
-                description: updated.description,
-                coverImage: updated.coverImage,
-                media: updated.media,
-                documents: docsWithDownload,
-                interviewDates: updated.interviewDates
-            });
-        } catch (err) {
-            console.error('Update error:', err);
-            return res.status(400).json({ error: err.message });
-        }
-    }
-);
 
 
 /**
@@ -460,6 +321,57 @@ router.delete('/:id', async (req, res) => {
             error: error.message,
             stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
+    }
+});
+
+
+router.get('/:serviceId/download/:docId', async (req, res) => {
+    try {
+        const { serviceId, docId } = req.params;
+        const service = await Service.findById(serviceId);
+        if (!service) return res.status(404).send('Service not found');
+
+        // Find the document sub‐record by its ObjectId
+        const doc = service.documents.id(docId);
+        if (!doc) return res.status(404).send('Document not found');
+
+        const fileUrl = doc.url;            // e.g. "https://res.cloudinary.com/.../raw/upload/v17489.../services/documents/abc123"
+        const originalName = doc.originalName;   // e.g. "1.pdf"
+
+        // 1) Ask Cloudinary for the raw file as a stream
+        const cloudinaryResponse = await axios.get(fileUrl, {
+            responseType: 'stream'
+        });
+
+        // 2) Copy Cloudinary’s Content-Type (e.g. application/pdf)
+        const contentType = cloudinaryResponse.headers['content-type'] || 'application/octet-stream';
+
+        // 3) Set our own headers so the browser saves as the original filename:
+        res.setHeader('Content-Type', contentType);
+        res.setHeader(
+            'Content-Disposition',
+            `attachment; filename="${path.basename(originalName)}"`
+        );
+
+        // 4) Pipe the Cloudinary stream directly into our response
+        cloudinaryResponse.data.pipe(res);
+    } catch (err) {
+        console.error('Download proxy error:', err);
+        return res.status(500).send('Failed to download document');
+    }
+});
+
+
+/**
+ * GET /        ← List all services
+ */
+router.get('/', async (req, res) => {
+    try {
+        const services = await Service.find();
+        return res.json(services);
+    } catch (error) {
+        console.error('Error fetching services:', error);
+        return res.status(500).json({ error: error.message });
     }
 });
 
